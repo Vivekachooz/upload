@@ -1,0 +1,33 @@
+name: Upload
+
+on:
+  workflow_dispatch:
+    inputs:
+      file_url:
+        description: 'URL of the file to download'
+        required: true
+      release_tag:
+        description: 'Tag of the release to upload to'
+        required: true
+
+jobs:
+  download_and_upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download file
+        run: |
+          curl -LO "${{ github.event.inputs.file_url }}"
+
+      - name: Get filename
+        id: get_filename
+        run: |
+          FILENAME=$(basename "${{ github.event.inputs.file_url }}")
+          echo "filename=$FILENAME" >> $GITHUB_OUTPUT
+
+      - name: Upload Asset to Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: ${{ steps.get_filename.outputs.filename }}
+          tag: ${{ github.event.inputs.release_tag }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          allowUpdates: true
