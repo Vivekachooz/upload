@@ -1,0 +1,48 @@
+name: Check for New LineageOS Builds
+
+on:
+  schedule:
+    # Run every Monday at 00:00 UTC
+    - cron: '0 0 * * 1'
+
+jobs:
+  check_and_download:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    - name: Fetch Build Page
+      run: curl -s https://download.lineageos.org/devices/X00TD/builds > lineageos_builds.html
+
+    - name: Parse for Latest Build
+      id: parse
+      run: |
+        latest_build=$(grep -oP 'href=".*X00TD-\d{8}-.*\.zip"' lineageos_builds.html | head -n 1 | cut -d'"' -f2)
+        echo "latest_build=$latest_build" >> $GITHUB_ENV
+
+    - name: Check if Build is New
+      id: check
+      run: |
+        echo "latest_build=$latest_build"
+        if [[ ! -f "downloaded_builds.txt" || ! $(grep "$latest_build" downloaded_builds.txt) ]]; then
+          echo "new_build=true" >> $GITHUB_ENV
+        else
+          echo "new_build=false" >> $GITHUB_ENV
+        fi
+
+    - name: Download New Build
+      if: env.new_build == 'true'
+      run: |
+        curl -O "https://download.lineageos.org$latest_build"
+        echo "$latest_build" >> downloaded_builds.txt
+
+    - name: Upload Build to Releases
+      if: env.new_build == 'true'
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ secrets.GITHUB_REPOSITORY }}/releases/latest/assets{?name,label}
+        asset_path: ./$(basename "$latest_build")
+        asset_name: $(basename "$latest_build")
+        asset_content_type: application/zip
